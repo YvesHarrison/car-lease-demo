@@ -17,11 +17,11 @@ var logger = shim.NewLogger("CLDChaincode")
 //						 user's eCert
 //==============================================================================================================================
 //CURRENT WORKAROUND USES ROLES CHANGE WHEN OWN USERS CAN BE CREATED SO THAT IT READ 1, 2, 3, 4, 5
-const   AUTHORITY      =  "regulator"
-const   MANUFACTURER   =  "manufacturer"
-const   PRIVATE_ENTITY =  "private"
-const   LEASE_COMPANY  =  "lease_company"
-const   SCRAP_MERCHANT =  "scrap_merchant"
+const   ENTRY      =  "regulator"
+const   TRAINING   =  "manufacturer"
+const   PROMOTION  =  "private"
+const   TRANSFER  =  "lease_company"
+const   RETIRE =  "scrap_merchant"
 
 
 //==============================================================================================================================
@@ -42,7 +42,7 @@ const   STATE_BEING_SCRAPPED  		=  4
 //==============================================================================================================================
 type  SimpleChaincode struct {
 }
-
+//车辆属性
 //==============================================================================================================================
 //	Vehicle - Defines the structure for a car object. JSON on right tells it what JSON fields to map to
 //			  that element when reading a JSON object into the struct e.g. JSON make -> Struct Make.
@@ -60,18 +60,18 @@ type Vehicle struct {
 	LeaseContractID string `json:"leaseContractID"`
 }
 
-
+//V5C，数据存储结构
 //==============================================================================================================================
 //	V5C Holder - Defines the structure that holds all the v5cIDs for vehicles that have been created.
 //				Used as an index when querying all vehicles.
 //==============================================================================================================================
 
 type V5C_Holder struct {
-	V5Cs 	[]string `json:"v5cs"`
+	V5Cs 	[]string `json:"v5cs"`V5Cs字符串存储
 }
 
 //==============================================================================================================================
-//	User_and_eCert - Struct for storing the JSON of a user and their ecert
+//	User_and_eCert - Struct for storing the JSON of a user and their ecert驾照
 //==============================================================================================================================
 
 type User_and_eCert struct {
@@ -107,7 +107,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 //	 General Functions
 //==============================================================================================================================
 //	 get_ecert - Takes the name passed and calls out to the REST API for HyperLedger to retrieve the ecert
-//				 for that user. Returns the ecert as retrived including html encoding.
+//				 for that user. Returns the ecert as retrived including html encoding.名字查驾照
 //==============================================================================================================================
 func (t *SimpleChaincode) get_ecert(stub shim.ChaincodeStubInterface, name string) ([]byte, error) {
 
@@ -119,7 +119,7 @@ func (t *SimpleChaincode) get_ecert(stub shim.ChaincodeStubInterface, name strin
 }
 
 //==============================================================================================================================
-//	 add_ecert - Adds a new ecert and user pair to the table of ecerts
+//	 add_ecert - Adds a new ecert and user pair to the table of ecerts添加驾驶员
 //==============================================================================================================================
 
 func (t *SimpleChaincode) add_ecert(stub shim.ChaincodeStubInterface, name string, ecert string) ([]byte, error) {
@@ -134,10 +134,10 @@ func (t *SimpleChaincode) add_ecert(stub shim.ChaincodeStubInterface, name strin
 	return nil, nil
 
 }
-
+//链上信息查找
 //==============================================================================================================================
 //	 get_caller - Retrieves the username of the user who invoked the chaincode.
-//				  Returns the username as a string.
+//				  Returns the username as a string.获取用户名
 //==============================================================================================================================
 
 func (t *SimpleChaincode) get_username(stub shim.ChaincodeStubInterface) (string, error) {
@@ -349,9 +349,9 @@ func (t *SimpleChaincode) create_vehicle(stub shim.ChaincodeStubInterface, calle
 
 																		if record != nil { return nil, errors.New("Vehicle already exists") }
 
-	if 	caller_affiliation != AUTHORITY {							// Only the regulator can create a new v5c
+	if 	caller_affiliation != ENTRY {							// Only the regulator can create a new v5c
 
-		return nil, errors.New(fmt.Sprintf("Permission Denied. create_vehicle. %v === %v", caller_affiliation, AUTHORITY))
+		return nil, errors.New(fmt.Sprintf("Permission Denied. create_vehicle. %v === %v", caller_affiliation, ENTRY))
 
 	}
 
@@ -393,8 +393,8 @@ func (t *SimpleChaincode) authority_to_manufacturer(stub shim.ChaincodeStubInter
 
 	if     	v.Status				== STATE_TEMPLATE	&&
 			v.Owner					== caller			&&
-			caller_affiliation		== AUTHORITY		&&
-			recipient_affiliation	== MANUFACTURER		&&
+			caller_affiliation		== ENTRY		&&
+			recipient_affiliation	== TRAINING		&&
 			v.Scrapped				== false			{		// If the roles and users are ok
 
 					v.Owner  = recipient_name		// then make the owner the new owner
@@ -402,7 +402,7 @@ func (t *SimpleChaincode) authority_to_manufacturer(stub shim.ChaincodeStubInter
 
 	} else {									// Otherwise if there is an error
 															fmt.Printf("AUTHORITY_TO_MANUFACTURER: Permission Denied");
-                                                            return nil, errors.New(fmt.Sprintf("Permission Denied. authority_to_manufacturer. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PRIVATE_ENTITY, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
+                                                            return nil, errors.New(fmt.Sprintf("Permission Denied. authority_to_manufacturer. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PROMOTION, recipient_affiliation, RETIRE, v.Scrapped, false))
 
 
 	}
@@ -431,15 +431,15 @@ func (t *SimpleChaincode) manufacturer_to_private(stub shim.ChaincodeStubInterfa
 
 	if 		v.Status				== STATE_MANUFACTURE	&&
 			v.Owner					== caller				&&
-			caller_affiliation		== MANUFACTURER			&&
-			recipient_affiliation	== PRIVATE_ENTITY		&&
+			caller_affiliation		== TRAINING			&&
+			recipient_affiliation	== PROMOTION		&&
 			v.Scrapped     == false							{
 
 					v.Owner = recipient_name
 					v.Status = STATE_PRIVATE_OWNERSHIP
 
 	} else {
-        return nil, errors.New(fmt.Sprintf("Permission Denied. manufacturer_to_private. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PRIVATE_ENTITY, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
+        return nil, errors.New(fmt.Sprintf("Permission Denied. manufacturer_to_private. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PROMOTION, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
     }
 
 	_, err := t.save_changes(stub, v)
@@ -457,14 +457,14 @@ func (t *SimpleChaincode) private_to_private(stub shim.ChaincodeStubInterface, v
 
 	if 		v.Status				== STATE_PRIVATE_OWNERSHIP	&&
 			v.Owner					== caller					&&
-			caller_affiliation		== PRIVATE_ENTITY			&&
-			recipient_affiliation	== PRIVATE_ENTITY			&&
+			caller_affiliation		== PROMOTION			&&
+			recipient_affiliation	== PROMOTION			&&
 			v.Scrapped				== false					{
 
 					v.Owner = recipient_name
 
 	} else {
-        return nil, errors.New(fmt.Sprintf("Permission Denied. private_to_private. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PRIVATE_ENTITY, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
+        return nil, errors.New(fmt.Sprintf("Permission Denied. private_to_private. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PROMOTION, recipient_affiliation, RETIRE, v.Scrapped, false))
 	}
 
 	_, err := t.save_changes(stub, v)
@@ -482,14 +482,14 @@ func (t *SimpleChaincode) private_to_lease_company(stub shim.ChaincodeStubInterf
 
 	if 		v.Status				== STATE_PRIVATE_OWNERSHIP	&&
 			v.Owner					== caller					&&
-			caller_affiliation		== PRIVATE_ENTITY			&&
-			recipient_affiliation	== LEASE_COMPANY			&&
+			caller_affiliation		== PROMOTION			&&
+			recipient_affiliation	== TRANSFER			&&
             v.Scrapped     			== false					{
 
 					v.Owner = recipient_name
 
 	} else {
-        return nil, errors.New(fmt.Sprintf("Permission denied. private_to_lease_company. %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PRIVATE_ENTITY, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
+        return nil, errors.New(fmt.Sprintf("Permission denied. private_to_lease_company. %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PROMOTION, recipient_affiliation, RETIRE, v.Scrapped, false))
 
 	}
 
@@ -507,14 +507,14 @@ func (t *SimpleChaincode) lease_company_to_private(stub shim.ChaincodeStubInterf
 
 	if		v.Status				== STATE_PRIVATE_OWNERSHIP	&&
 			v.Owner  				== caller					&&
-			caller_affiliation		== LEASE_COMPANY			&&
-			recipient_affiliation	== PRIVATE_ENTITY			&&
+			caller_affiliation		== TRANSFER			&&
+			recipient_affiliation	== PROMOTION			&&
 			v.Scrapped				== false					{
 
 				v.Owner = recipient_name
 
 	} else {
-		return nil, errors.New(fmt.Sprintf("Permission Denied. lease_company_to_private. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PRIVATE_ENTITY, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
+		return nil, errors.New(fmt.Sprintf("Permission Denied. lease_company_to_private. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PROMOTION, recipient_affiliation, RETIRE, v.Scrapped, false))
 	}
 
 	_, err := t.save_changes(stub, v)
@@ -531,15 +531,15 @@ func (t *SimpleChaincode) private_to_scrap_merchant(stub shim.ChaincodeStubInter
 
 	if		v.Status				== STATE_PRIVATE_OWNERSHIP	&&
 			v.Owner					== caller					&&
-			caller_affiliation		== PRIVATE_ENTITY			&&
-			recipient_affiliation	== SCRAP_MERCHANT			&&
+			caller_affiliation		== PROMOTION			&&
+			recipient_affiliation	== RETIRE			&&
 			v.Scrapped				== false					{
 
 					v.Owner = recipient_name
 					v.Status = STATE_BEING_SCRAPPED
 
 	} else {
-        return nil, errors.New(fmt.Sprintf("Permission Denied. private_to_scrap_merchant. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PRIVATE_ENTITY, recipient_affiliation, SCRAP_MERCHANT, v.Scrapped, false))
+        return nil, errors.New(fmt.Sprintf("Permission Denied. private_to_scrap_merchant. %v %v === %v, %v === %v, %v === %v, %v === %v, %v === %v", v, v.Status, STATE_PRIVATE_OWNERSHIP, v.Owner, caller, caller_affiliation, PROMOTION, recipient_affiliation, RETIRE, v.Scrapped, false))
 	}
 
 	_, err := t.save_changes(stub, v)
@@ -563,7 +563,7 @@ func (t *SimpleChaincode) update_vin(stub shim.ChaincodeStubInterface, v Vehicle
 
 	if 		v.Status			== STATE_MANUFACTURE	&&
 			v.Owner				== caller				&&
-			caller_affiliation	== MANUFACTURER			&&
+			caller_affiliation	== TRAINING		&&
 			v.VIN				== 0					&&			// Can't change the VIN after its initial assignment
 			v.Scrapped			== false				{
 
@@ -590,7 +590,7 @@ func (t *SimpleChaincode) update_registration(stub shim.ChaincodeStubInterface, 
 
 
 	if		v.Owner				== caller			&&
-			caller_affiliation	!= SCRAP_MERCHANT	&&
+			caller_affiliation	!= RETIRE	&&
 			v.Scrapped			== false			{
 
 					v.Reg = new_value
@@ -613,7 +613,7 @@ func (t *SimpleChaincode) update_registration(stub shim.ChaincodeStubInterface, 
 func (t *SimpleChaincode) update_colour(stub shim.ChaincodeStubInterface, v Vehicle, caller string, caller_affiliation string, new_value string) ([]byte, error) {
 
 	if 		v.Owner				== caller				&&
-			caller_affiliation	== MANUFACTURER			&&/*((v.Owner				== caller			&&
+			caller_affiliation	== TRAINING		&&/*((v.Owner				== caller			&&
 			caller_affiliation	== MANUFACTURER)		||
 			caller_affiliation	== AUTHORITY)			&&*/
 			v.Scrapped			== false				{
@@ -639,13 +639,13 @@ func (t *SimpleChaincode) update_make(stub shim.ChaincodeStubInterface, v Vehicl
 
 	if 		v.Status			== STATE_MANUFACTURE	&&
 			v.Owner				== caller				&&
-			caller_affiliation	== MANUFACTURER			&&
+			caller_affiliation	== TRAINING		&&
 			v.Scrapped			== false				{
 
 					v.Make = new_value
 	} else {
 
-        return nil, errors.New(fmt.Sprint("Permission denied. update_make %t %t %t" + v.Owner == caller, caller_affiliation == MANUFACTURER, v.Scrapped))
+        return nil, errors.New(fmt.Sprint("Permission denied. update_make %t %t %t" + v.Owner == caller, caller_affiliation == TRAINING, v.Scrapped))
 
 
 	}
@@ -665,13 +665,13 @@ func (t *SimpleChaincode) update_model(stub shim.ChaincodeStubInterface, v Vehic
 
 	if 		v.Status			== STATE_MANUFACTURE	&&
 			v.Owner				== caller				&&
-			caller_affiliation	== MANUFACTURER			&&
+			caller_affiliation	== TRAINING			&&
 			v.Scrapped			== false				{
 
 					v.Model = new_value
 
 	} else {
-        return nil, errors.New(fmt.Sprint("Permission denied. update_model %t %t %t" + v.Owner == caller, caller_affiliation == MANUFACTURER, v.Scrapped))
+        return nil, errors.New(fmt.Sprint("Permission denied. update_model %t %t %t" + v.Owner == caller, caller_affiliation == TRAINING, v.Scrapped))
 
 	}
 
@@ -690,7 +690,7 @@ func (t *SimpleChaincode) scrap_vehicle(stub shim.ChaincodeStubInterface, v Vehi
 
 	if		v.Status			== STATE_BEING_SCRAPPED	&&
 			v.Owner				== caller				&&
-			caller_affiliation	== SCRAP_MERCHANT		&&
+			caller_affiliation	== RETIRE		&&
 			v.Scrapped			== false				{
 
 					v.Scrapped = true
@@ -719,7 +719,7 @@ func (t *SimpleChaincode) get_vehicle_details(stub shim.ChaincodeStubInterface, 
 																if err != nil { return nil, errors.New("GET_VEHICLE_DETAILS: Invalid vehicle object") }
 
 	if 		v.Owner				== caller		||
-			caller_affiliation	== AUTHORITY	{
+			caller_affiliation	== ENTRY	{
 
 					return bytes, nil
 	} else {
